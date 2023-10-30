@@ -8,17 +8,17 @@ extern "C" {
 #include <stdlib.h>
 
 int RS232_OpenComport(int, int);
-int RS232_PollComport(int, unsigned char *, int);
-int RS232_SendByte(int, unsigned char);
-int RS232_SendBuf(int, unsigned char *, int);
-void RS232_CloseComport(int);
-void RS232_cputs(int, const char *);
-int RS232_IsCTSEnabled(int);
-int RS232_IsDSREnabled(int);
-void RS232_enableDTR(int);
-void RS232_disableDTR(int);
-void RS232_enableRTS(int);
-void RS232_disableRTS(int);
+int RS232_PollComport(unsigned char *, int);
+int RS232_SendByte(unsigned char);
+int RS232_SendBuf(unsigned char *, int);
+void RS232_CloseComport();
+void RS232_cputs(const char *);
+int RS232_IsCTSEnabled();
+int RS232_IsDSREnabled();
+void RS232_enableDTR();
+void RS232_disableDTR();
+void RS232_enableRTS();
+void RS232_disableRTS();
 
 #define SBEGIN  0x01
 #define SDATA   0x02
@@ -35,11 +35,7 @@ int DownloadProgress = 0;
 int com;
 int end = 0;
 
-HANDLE Cport[16];
-char comports[16][10]={"\\\\.\\COM1",  "\\\\.\\COM2",  "\\\\.\\COM3",  "\\\\.\\COM4",
-                       "\\\\.\\COM5",  "\\\\.\\COM6",  "\\\\.\\COM7",  "\\\\.\\COM8",
-                       "\\\\.\\COM9",  "\\\\.\\COM10", "\\\\.\\COM11", "\\\\.\\COM12",
-                       "\\\\.\\COM13", "\\\\.\\COM14", "\\\\.\\COM15", "\\\\.\\COM16"};
+HANDLE Cport;
 char baudr[64];
 
 void ProcessProgram(void);
@@ -51,12 +47,13 @@ void ProcessProgram(void);
 * argv[3]----Device
 */
 int main(int arg, char *argv[])
-{	
+{
 	int fLen = 0;
 	int device = 0;
 
 	printf("Copyright (c) 2013 RedBearLab.com\n");
 	printf("%s version 0.5\n", argv[0]);
+	printf("Tweaked 2023 by Kerry\n");
 	if(arg < 4)
 	{
 		printf("Invalid parameters.\n");
@@ -70,7 +67,7 @@ int main(int arg, char *argv[])
 	char form[5] = ".bin";
 	char format[5] = "    ";
 	fLen = strlen(argv[2]);
-	if(fLen < 5) 
+	if(fLen < 5)
 	{
 		printf("The .bin file name is invalid!\n\n");
 		return 0;  // file path is not valid
@@ -78,7 +75,7 @@ int main(int arg, char *argv[])
 	format[3] = argv[2][fLen-1];
 	format[2] = argv[2][fLen-2];
 	format[1] = argv[2][fLen-3];
-	format[0] = argv[2][fLen-4];	
+	format[0] = argv[2][fLen-4];
 	if(0 != strcmp(form, format))
 	{
 		printf("File format must be .bin\n\n");
@@ -91,14 +88,15 @@ int main(int arg, char *argv[])
 	printf("Bin file: %s\n", argv[2]);
 	if(device == 0)
 	{
-		printf("Device  : Default (e.g. UNO)\n\n");		
+		printf("Device  : Default (e.g. UNO)\n\n");
 	}
 	else
 	{
 		printf("Device: Leonardo\n\n");
 	}
 
-	com = atoi(argv[1]) - 1;
+	// com = atoi(argv[1]) - 1;
+	com = atoi(argv[1]);
 	if(1 == RS232_OpenComport(com, 115200))
 	{
 		return 0;	// Open comprt error
@@ -106,21 +104,21 @@ int main(int arg, char *argv[])
 	printf("Comport open!\n");
 	if(device == 0)
 	{
-		RS232_disableDTR(com);
+		RS232_disableDTR();
 		printf("<Baud:115200> <data:8> <parity:none> <stopbit:1> <DTR:off> <RTS:off>\n\n");
 	}
 	else
 	{
-		RS232_enableDTR(com);
+		RS232_enableDTR();
 		printf("<Baud:115200> <data:8> <parity:none> <stopbit:1> <DTR:on> <RTS:off>\n\n");
 	}
-	RS232_disableRTS(com);
-	
+	RS232_disableRTS();
+
 	pfile = fopen(argv[2], "rb");      // read only
 	if(NULL == pfile)
     {
 		printf("The file doesn't exist or is occupied!\n");
-		RS232_CloseComport(com);
+		RS232_CloseComport();
 		printf("Comport closed!\n\n");
         return 0;
     }
@@ -128,8 +126,8 @@ int main(int arg, char *argv[])
 	fseek(pfile,0,SEEK_SET);
     fseek(pfile,0,SEEK_END);
     fsize = ftell(pfile);
-    fseek(pfile,0,SEEK_SET);   
-	Remain = fsize % 512;	
+    fseek(pfile,0,SEEK_SET);
+	Remain = fsize % 512;
 	if(Remain != 0)
 	{
 		BlkTot = fsize / 512 + 1;
@@ -144,21 +142,26 @@ int main(int arg, char *argv[])
     BlkNum = 0;
 
 	printf("Enable transmission...\n");
-	unsigned char buf[2] = {SBEGIN, 0};      // Enable transmission,  do not verify
-	if(RS232_SendBuf(com, buf, 2) != 2)
+	Sleep(500);
+
+    printf("Sending data...\n");
+
+    int verify = 1;
+	unsigned char buf[2] = {SBEGIN, verify};      // Enable transmission,  do not verify
+	if(RS232_SendBuf(buf, 2) != 2)
 	{
 		printf("Enable failed!\n");
 		fclose(pfile);
 		printf("File closed!\n");
-		RS232_CloseComport(com);
+		RS232_CloseComport();
 		printf("Comport closed!\n\n");
 		return 0;
 	}
 	else
 	{
-		printf("Request sent already!\n");
+		printf("Begin Request sent!\n");
 	}
-	
+
 	printf("/********************************************************************/\n");
 	printf("* If there is no respond last for 3s, please press \"Ctrl+C\" to exit!\n");
 	printf("* And pay attention to :\n*   1. The connection between computer and Arduino;\n");
@@ -193,7 +196,7 @@ void ProcessProgram()
 {
     int len;
 	unsigned char rx;
-	len = RS232_PollComport(com, &rx, 1);
+	len = RS232_PollComport(&rx, 1);
     if(len > 0)
     {
         switch(rx)
@@ -203,7 +206,7 @@ void ProcessProgram()
                 if(BlkNum == BlkTot)
                 {
                     unsigned char temp = SEND;
-                   	RS232_SendByte(com, temp);
+                   	RS232_SendByte(temp);
 					end = 2;
                 }
                 else
@@ -237,7 +240,7 @@ void ProcessProgram()
                     }
                     buf[513] = (CheckSum >> 8) & 0x00FF;
                     buf[514] = CheckSum & 0x00FF;
-					RS232_SendBuf(com, buf, 515);
+					RS232_SendBuf(buf, 515);
                     BlkNum++;
 					printf("%d  ", BlkNum);
                 }
@@ -253,8 +256,17 @@ void ProcessProgram()
                 }
                 else
                 {
-                    end = 1;
+                    end = 0;
                     printf("No chip detected!\n");
+                    unsigned char buf[2] = {SBEGIN, 0};      // Enable transmission,  do not verify
+                    if(RS232_SendBuf(buf, 2) != 2)
+                    {
+                        printf("Resent begin request!\n");
+                    }
+                    else{
+                        printf("Resent begin request failed :-(\n");
+                    }
+                    Sleep(500);
                 }
                 break;
             }
@@ -268,11 +280,11 @@ void ProcessProgram()
 
 int RS232_OpenComport(int comport_number, int baudrate)
 {
-  if((comport_number>15)||(comport_number<0))
-  {
-    printf("illegal comport number\n\n");
-    return(1);
-  }
+ // if((comport_number>15)||(comport_number<0))
+ // {
+ //   printf("illegal comport number\n\n");
+ //   return(1);
+ // }
 
   switch(baudrate)
   {
@@ -311,7 +323,11 @@ int RS232_OpenComport(int comport_number, int baudrate)
                    break;
   }
 
-  Cport[comport_number] = CreateFileA(comports[comport_number],
+  char comport[10];
+
+  sprintf(comport, "\\\\.\\COM%d", comport_number);
+
+  Cport = CreateFileA(comport,
                       GENERIC_READ|GENERIC_WRITE,
                       0,                          /* no share  */
                       NULL,                       /* no security */
@@ -319,7 +335,7 @@ int RS232_OpenComport(int comport_number, int baudrate)
                       0,                          /* no threads */
                       NULL);                      /* no templates */
 
-  if(Cport[comport_number]==INVALID_HANDLE_VALUE)
+  if(Cport==INVALID_HANDLE_VALUE)
   {
     printf("unable to open comport!\n\n");
     return(1);
@@ -332,14 +348,14 @@ int RS232_OpenComport(int comport_number, int baudrate)
   if(!BuildCommDCBA(baudr, &port_settings))
   {
     printf("unable to set comport dcb settings\n\n");
-    CloseHandle(Cport[comport_number]);
+    CloseHandle(Cport);
     return(1);
   }
 
-  if(!SetCommState(Cport[comport_number], &port_settings))
+  if(!SetCommState(Cport, &port_settings))
   {
     printf("unable to set comport cfg settings\n\n");
-    CloseHandle(Cport[comport_number]);
+    CloseHandle(Cport);
     return(1);
   }
 
@@ -351,10 +367,10 @@ int RS232_OpenComport(int comport_number, int baudrate)
   Cptimeouts.WriteTotalTimeoutMultiplier = 0;
   Cptimeouts.WriteTotalTimeoutConstant   = 0;
 
-  if(!SetCommTimeouts(Cport[comport_number], &Cptimeouts))
+  if(!SetCommTimeouts(Cport, &Cptimeouts))
   {
     printf("unable to set comport time-out settings\n\n");
-    CloseHandle(Cport[comport_number]);
+    CloseHandle(Cport);
     return(1);
   }
 
@@ -362,7 +378,7 @@ int RS232_OpenComport(int comport_number, int baudrate)
 }
 
 
-int RS232_PollComport(int comport_number, unsigned char *buf, int size)
+int RS232_PollComport(unsigned char *buf, int size)
 {
   int n;
 
@@ -370,27 +386,27 @@ int RS232_PollComport(int comport_number, unsigned char *buf, int size)
 /* added the void pointer cast, otherwise gcc will complain about */
 /* "warning: dereferencing type-punned pointer will break strict aliasing rules" */
 
-  ReadFile(Cport[comport_number], buf, size, (LPDWORD)((void *)&n), NULL);
+  ReadFile(Cport, buf, size, (LPDWORD)((void *)&n), NULL);
 
   return(n);
 }
 
-int RS232_SendByte(int comport_number, unsigned char byte)
+int RS232_SendByte(unsigned char byte)
 {
   int n;
 
-  WriteFile(Cport[comport_number], &byte, 1, (LPDWORD)((void *)&n), NULL);
+  WriteFile(Cport, &byte, 1, (LPDWORD)((void *)&n), NULL);
 
   if(n<0)  return(1);
 
   return(0);
 }
 
-int RS232_SendBuf(int comport_number, unsigned char *buf, int size)
+int RS232_SendBuf(unsigned char *buf, int size)
 {
   int n;
 
-  if(WriteFile(Cport[comport_number], buf, size, (LPDWORD)((void *)&n), NULL))
+  if(WriteFile(Cport, buf, size, (LPDWORD)((void *)&n), NULL))
   {
     return(n);
   }
@@ -398,54 +414,54 @@ int RS232_SendBuf(int comport_number, unsigned char *buf, int size)
   return(-1);
 }
 
-void RS232_CloseComport(int comport_number)
+void RS232_CloseComport()
 {
-  CloseHandle(Cport[comport_number]);
+  CloseHandle(Cport);
 }
 
-int RS232_IsCTSEnabled(int comport_number)
+int RS232_IsCTSEnabled()
 {
   int status;
 
-  GetCommModemStatus(Cport[comport_number], (LPDWORD)((void *)&status));
+  GetCommModemStatus(Cport, (LPDWORD)((void *)&status));
 
   if(status&MS_CTS_ON) return(1);
   else return(0);
 }
 
-int RS232_IsDSREnabled(int comport_number)
+int RS232_IsDSREnabled()
 {
   int status;
 
-  GetCommModemStatus(Cport[comport_number], (LPDWORD)((void *)&status));
+  GetCommModemStatus(Cport, (LPDWORD)((void *)&status));
 
   if(status&MS_DSR_ON) return(1);
   else return(0);
 }
 
-void RS232_enableDTR(int comport_number)
+void RS232_enableDTR()
 {
-  EscapeCommFunction(Cport[comport_number], SETDTR);
+  EscapeCommFunction(Cport, SETDTR);
 }
 
-void RS232_disableDTR(int comport_number)
+void RS232_disableDTR()
 {
-  EscapeCommFunction(Cport[comport_number], CLRDTR);
+  EscapeCommFunction(Cport, CLRDTR);
 }
 
-void RS232_enableRTS(int comport_number)
+void RS232_enableRTS()
 {
-  EscapeCommFunction(Cport[comport_number], SETRTS);
+  EscapeCommFunction(Cport, SETRTS);
 }
 
-void RS232_disableRTS(int comport_number)
+void RS232_disableRTS()
 {
-  EscapeCommFunction(Cport[comport_number], CLRRTS);
+  EscapeCommFunction(Cport, CLRRTS);
 }
 
-void RS232_cputs(int comport_number, const char *text)  /* sends a string to serial port */
+void RS232_cputs(const char *text)  /* sends a string to serial port */
 {
-  while(*text != 0)   RS232_SendByte(comport_number, *(text++));
+  while(*text != 0)   RS232_SendByte(*(text++));
 }
 
 #ifdef __cplusplus
