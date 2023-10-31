@@ -79,8 +79,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 #define SDATA                 0x02
 #define SRSP                  0x03
 #define SEND                  0x04
-#define ERRO                   0x05
-#define NOCHIP                 0x06
+#define ERRO                  0x05
 #define WAITING               0x00
 #define RECEIVING             0x01
 
@@ -524,7 +523,6 @@ void ProgrammerInit(void)
 
 void setup() 
 {  
- // ProgrammerInit();  
   Serial.begin(115200);
   // If using Leonado as programmer, 
   //it should add below code,otherwise,comment it.
