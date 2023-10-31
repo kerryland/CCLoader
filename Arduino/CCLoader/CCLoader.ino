@@ -79,15 +79,17 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 #define SDATA                 0x02
 #define SRSP                  0x03
 #define SEND                  0x04
-#define ERRO                 0x05
+#define ERRO                   0x05
+#define NOCHIP                 0x06
 #define WAITING               0x00
 #define RECEIVING             0x01
 
-// Debug control pins & the indicate LED for NodeMCU v2
-int DD = 12;
-int DC = 14;
-int RESET = 2;
-int LED = 16;
+// Debug control pins & the indicate LED
+
+int DD = 14; //GPIO14=D5 on NodeMCU/WeMos D1 Mini
+int DC = 4; //GPIO4=D2 on NodeMCU/WeMos D1 Mini
+int RESET = 5; //GPIO5=D1 on NodeMCU/WeMos D1 Mini
+int LED = 2; //GPIO2=D4 and the Blue LED on the WeMos D1 Mini and the ESP-12E module on the NodeMCU, or can use GPIO16=D0 for the other Blue LED on NodeMCU
 
 /******************************************************************************
  VARIABLES*/
@@ -522,10 +524,11 @@ void ProgrammerInit(void)
 
 void setup() 
 {  
-  ProgrammerInit();  
+ // ProgrammerInit();  
   Serial.begin(115200);
   // If using Leonado as programmer, 
   //it should add below code,otherwise,comment it.
+  sleep(5);
   while(!Serial);
 }
 
@@ -553,6 +556,7 @@ void loop()
     }
   }
 
+  ProgrammerInit();
   debug_init();
   chip_id = read_chip_id();
   if(chip_id == 0) 
@@ -662,5 +666,4 @@ void loop()
   digitalWrite(LED, LOW);
   RunDUP();
 }
-
 
